@@ -1,19 +1,10 @@
 {
-  "name": "blezzydollars",
+  "name": "marchafacil",
   "version": "1.0.0",
-  "description": "Marcha facil Dollars Investment Platform - 1 Year Lock, 5% Monthly Payout",
-  "main": "main.js",
+  "main": "server.js",
   "scripts": {
-    "start": "node main.js",
-    "dev": "nodemon main.js"
+    "start": "node server.js"
   },
-  "keywords": [
-    "investment",
-    "wallet",
-    "payout"
-  ],
-  "author": "Marchafacil",
-  "license": "ISC",
   "dependencies": {
     "express": "^4.18.2",
     "express-session": "^1.17.3",
