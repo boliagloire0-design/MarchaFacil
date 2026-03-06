@@ -1,0 +1,134 @@
+const express = require('express');
+const session = require('express-session');
+const mongoose = require('mongoose');
+const app = express();
+
+// =============================================================
+// ✅ CONFIGURATION & DATABASE
+// =============================================================
+const MONGO_URI = "mongodb+srv://Gloirebolia1995:Sheilla9611@cluster0.bem8n8n.mongodb.net/blezzypay?retryWrites=true&w=majority";
+const ADMIN_PHONE = "258855917810"; 
+const WHATSAPP_LINK = `https://wa.me/${ADMIN_PHONE}`;
+const TELEGRAM_LINK = `https://t.me/+${ADMIN_PHONE}`;
+
+mongoose.connect(MONGO_URI)
+    .then(() => console.log("✅ Database Connected"))
+    .catch(err => console.error("❌ Database Error:", err));
+
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(session({ secret: 'blezzy_key_99', resave: false, saveUninitialized: true }));
+
+// =============================================================
+// ✅ DATA SCHEMA (1 Year Lock / 5% Monthly)
+// =============================================================
+const userSchema = new mongoose.Schema({
+    email: { type: String, unique: true, required: true },
+    passcode: String,
+    name: String,
+    phone: String,
+    balance: { type: Number, default: 0 },
+    investments: [{ 
+        capital: Number, 
+        monthlyProfit: Number, 
+        lastPayout: Date, 
+        expiryDate: Date 
+    }],
+    pendingDeposit: { amount: Number, status: String, date: Date },
+    transactions: [{ type: { type: String }, amount: Number, date: String }]
+});
+const User = mongoose.model('User', userSchema);
+
+// =============================================================
+// ✅ LOGIC: INVESTMENTS & CLAIMS
+// =============================================================
+
+// Admin confirms deposit -> Starts 1 Year Lock
+app.post('/confirm', async (req, res) => {
+    const u = await User.findById(req.body.uid);
+    if (u && u.pendingDeposit) {
+        const amt = u.pendingDeposit.amount;
+        const now = new Date();
+        const expiry = new Date();
+        expiry.setFullYear(now.getFullYear() + 1); 
+
+        u.investments.push({ 
+            capital: amt, 
+            monthlyProfit: amt * 0.05, 
+            lastPayout: now,
+            expiryDate: expiry
+        });
+        u.transactions.push({ type: "Deposit Locked", amount: amt, date: now.toLocaleDateString() });
+        u.pendingDeposit = null;
+        await u.save();
+    }
+    res.redirect('/admin');
+});
+
+// User claims 5% profit every 30 days
+app.post('/claim', async (req, res) => {
+    const u = await User.findById(req.session.userId);
+    const now = new Date();
+    let totalClaimed = 0;
+
+    u.investments.forEach(inv => {
+        const daysSincePayout = Math.floor((now - inv.lastPayout) / (1000 * 60 * 60 * 24));
+        if (daysSincePayout >= 30) {
+            totalClaimed += inv.monthlyProfit;
+            inv.lastPayout = now;
+        }
+        if (now >= inv.expiryDate && inv.capital > 0) {
+            totalClaimed += inv.capital;
+            inv.capital = 0; 
+        }
+    });
+
+    if (totalClaimed > 0) {
+        u.balance += totalClaimed;
+        u.transactions.push({ type: "Profit Payout", amount: totalClaimed, date: now.toLocaleDateString() });
+        await u.save();
+    }
+    res.redirect('/dashboard');
+});
+
+// =============================================================
+// ✅ UI / DESIGN (With WhatsApp & Telegram)
+// =============================================================
+const css = `* { box-sizing: border-box; } body { background: #000; color: white; font-family: sans-serif; margin: 0; } .container { padding: 20px; max-width: 480px; margin: 0 auto; } .card { background: #11141a; padding: 20px; border-radius: 15px; border: 1px solid #1c2026; margin-bottom: 15px; } .balance-card { background: linear-gradient(135deg, #194bfd 0%, #6e00ff 100%); border-radius: 20px; padding: 25px; margin-bottom: 25px; } button { width: 100%; padding: 16px; background: #194bfd; border: none; font-weight: 700; color: white; border-radius: 12px; cursor: pointer; } .action-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 20px 0; } .support-btn { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 12px; border-radius: 10px; text-decoration: none; color: white; font-weight: bold; font-size: 14px; }`;
+
+function renderDashboard(u) {
+    return `<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body>
+    <div class="container">
+        <div class="balance-card">
+            <small>Available Balance</small>
+            <div style="font-size:32px; font-weight:800; margin:10px 0">$${u.balance.toFixed(2)}</div>
+        </div>
+        
+        <form action="/claim" method="POST"><button style="background:#00c853">Claim 5% Monthly Profit</button></form>
+
+        <div class="action-grid">
+            <a href="${WHATSAPP_LINK}" class="support-btn" style="background:#25D366">WhatsApp</a>
+            <a href="${TELEGRAM_LINK}" class="support-btn" style="background:#0088cc">Telegram</a>
+        </div>
+
+        <h3>Passcode Reset</h3>
+        <p style="font-size:12px; color:#848e9c">To reset your passcode, message us on WhatsApp or Telegram with your registered email.</p>
+    </div></body></html>`;
+}
+
+// =============================================================
+// ✅ SYSTEM MONITORING (Offline Notification)
+// =============================================================
+process.on('uncaughtException', (err) => {
+    // This logs the crash so an external monitor can see it and notify you
+    console.error(`!!! CRITICAL SYSTEM FAILURE !!! Check Admin at ${ADMIN_PHONE}. Error: ${err.message}`);
+    process.exit(1);
+});
+
+app.get('/dashboard', async (req, res) => {
+    const u = await User.findById(req.session.userId);
+    if(u) res.send(renderDashboard(u));
+    else res.redirect('/');
+});
+
+app.listen(3000, () => console.log(`🚀 Blezzy Live on 3000`));
