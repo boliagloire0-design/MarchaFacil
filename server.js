@@ -7,16 +7,22 @@ const app = express();
 // ✅ CONFIGURATION & BRANDING
 // =============================================================
 const MONGO_URI = "mongodb+srv://Gloirebolia1995:Sheilla9611@cluster0.bem8n8n.mongodb.net/marchafacil?retryWrites=true&w=majority";
-const ADMIN_PHONE = "258855917810"; 
+const ADMIN_PHONE = "27855917810"; // Updated to SA format example
 const WHATSAPP_LINK = `https://wa.me/${ADMIN_PHONE}`;
+const CURRENCY = "R"; 
 
 mongoose.connect(MONGO_URI)
-    .then(() => console.log("✅ MarchaFácil Connected"))
-    .catch(err => console.error("❌ Database Error:", err));
+    .then(() => console.log("✅ MarchaFácil System Online"))
+    .catch(err => console.error("❌ DB Connection Failed:", err));
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-app.use(session({ secret: 'marchafacil_secure_88', resave: false, saveUninitialized: true }));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(session({ 
+    secret: 'marchafacil_ultra_secure_2026', 
+    resave: false, 
+    saveUninitialized: true,
+    cookie: { maxAge: 3600000 } // 1 hour session
+}));
 
 // =============================================================
 // ✅ DATA SCHEMA
@@ -30,15 +36,7 @@ const userSchema = new mongoose.Schema({
     investments: [{ 
         capital: Number, 
         monthlyProfit: Number, 
-        lastPayout: Date, 
         expiryDate: Date 
-    }],
-    activeLoans: [{ 
-        assetType: String, 
-        amountBorrowed: Number, 
-        repaymentAmount: Number, 
-        dueDate: Date, 
-        status: { type: String, default: "Active" } 
     }],
     pendingDeposit: { amount: Number, method: String, status: String, date: Date },
     transactions: [{ type: { type: String }, amount: Number, date: String }]
@@ -46,36 +44,52 @@ const userSchema = new mongoose.Schema({
 const User = mongoose.model('User', userSchema);
 
 // =============================================================
-// ✅ UI STYLES
+// ✅ UI STYLES (Modern Fintech Dark Theme)
 // =============================================================
 const css = `
-* { box-sizing: border-box; font-family: 'Inter', sans-serif; } 
-body { background: #000; color: white; margin: 0; padding-bottom: 60px; } 
-.container { padding: 20px; max-width: 480px; margin: 0 auto; } 
-.card { background: #11141a; padding: 20px; border-radius: 15px; border: 1px solid #1c2026; margin-bottom: 15px; } 
-.balance-card { background: linear-gradient(135deg, #00c853 0%, #007e33 100%); border-radius: 20px; padding: 25px; margin-bottom: 25px; text-align: center; } 
-.loan-card { border: 1px solid #ffbb33; background: #1a1500; }
-.admin-card { border: 1px solid #ff4444; background: #1a0000; }
-input, select { width: 100%; padding: 14px; margin: 8px 0; background: #0b0e11; border: 1px solid #2a2f38; color: white; border-radius: 10px; }
-button { width: 100%; padding: 16px; background: #00c853; border: none; font-weight: 700; color: white; border-radius: 12px; cursor: pointer; } 
-.btn-pawn { background: #ffbb33; color: black; }
-.btn-admin { background: #ff4444; margin-top: 5px; font-size: 12px; padding: 10px; }
+:root { --primary: #00e676; --bg: #0a0c10; --card: #161b22; --text: #f0f6fc; --admin: #f85149; }
+* { box-sizing: border-box; font-family: 'Segoe UI', Roboto, sans-serif; } 
+body { background: var(--bg); color: var(--text); margin: 0; line-height: 1.6; } 
+.container { padding: 20px; max-width: 450px; margin: 0 auto; } 
+.card { background: var(--card); padding: 20px; border-radius: 16px; border: 1px solid #30363d; margin-bottom: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); } 
+.header { text-align: center; padding: 40px 0 20px; }
+.logo { font-size: 28px; font-weight: 900; letter-spacing: -1px; color: var(--primary); text-transform: uppercase; }
+.balance-card { background: linear-gradient(135deg, #00c853 0%, #007e33 100%); color: white; border-radius: 24px; padding: 30px; text-align: center; margin-bottom: 30px; } 
+.input-group { margin-bottom: 15px; }
+label { display: block; font-size: 12px; margin-bottom: 5px; color: #8b949e; }
+input, select { width: 100%; padding: 14px; background: #010409; border: 1px solid #30363d; color: white; border-radius: 8px; font-size: 16px; }
+button { width: 100%; padding: 16px; background: var(--primary); border: none; font-weight: 700; color: #000; border-radius: 12px; cursor: pointer; transition: 0.2s; font-size: 16px; } 
+button:active { transform: scale(0.98); }
+.btn-outline { background: transparent; border: 1px solid var(--primary); color: var(--primary); margin-top: 10px; }
+.admin-badge { background: var(--admin); color: white; padding: 4px 8px; border-radius: 4px; font-size: 10px; vertical-align: middle; margin-left: 5px; }
 `;
 
 // =============================================================
-// ✅ USER ROUTES (Dashboard & Deposits)
+// ✅ AUTH ROUTES
 // =============================================================
 
 app.get('/', (req, res) => {
     res.send(`<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head>
-    <body style="display:flex; align-items:center; justify-content:center; height:100vh;">
-    <div class="container" style="text-align:center;">
-        <h1 style="color:#00c853;">MARCHAFÁCIL</h1>
-        <form action="/login" method="POST">
-            <input type="email" name="email" placeholder="Email" required>
-            <input type="password" name="passcode" placeholder="Passcode" required>
-            <button>Login / Entrar</button>
-        </form>
+    <body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">MarchaFácil</div>
+            <p style="color:#8b949e">Secure Digital Finance</p>
+        </div>
+        <div class="card">
+            <form action="/login" method="POST">
+                <div class="input-group">
+                    <label>Email Address</label>
+                    <input type="email" name="email" placeholder="name@example.com" required>
+                </div>
+                <div class="input-group">
+                    <label>Secure Passcode</label>
+                    <input type="password" name="passcode" placeholder="••••••" required>
+                </div>
+                <button type="submit">Access Dashboard</button>
+            </form>
+        </div>
+        <p style="text-align:center; font-size:12px; color:#484f58;">Authorized Personnel Only</p>
     </div></body></html>`);
 });
 
@@ -83,113 +97,92 @@ app.post('/login', async (req, res) => {
     const user = await User.findOne({ email: req.body.email.toLowerCase() });
     if (user && user.passcode === req.body.passcode) {
         req.session.userId = user._id;
+        req.session.isAdmin = user.isAdmin;
         return user.isAdmin ? res.redirect('/admin') : res.redirect('/dashboard');
     }
-    res.send("Invalid credentials. <a href='/'>Back</a>");
+    res.send("<script>alert('Invalid Credentials'); window.location='/';</script>");
 });
+
+app.get('/logout', (req, res) => {
+    req.session.destroy();
+    res.redirect('/');
+});
+
+// =============================================================
+// ✅ DASHBOARD
+// =============================================================
 
 app.get('/dashboard', async (req, res) => {
     if (!req.session.userId) return res.redirect('/');
     const u = await User.findById(req.session.userId);
-    let locked = 0; u.investments.forEach(inv => locked += inv.capital);
-
+    
     res.send(`<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body>
     <div class="container">
         <div class="balance-card">
-            <small>Saldo Disponível</small>
-            <div style="font-size:35px; font-weight:800;">$${u.balance.toFixed(2)}</div>
-            <div style="font-size:12px; opacity:0.8;">Locked Savings: $${locked.toFixed(2)}</div>
+            <small style="opacity:0.8; text-transform:uppercase; letter-spacing:1px;">Available Balance</small>
+            <div style="font-size:42px; font-weight:800; margin:10px 0;">${CURRENCY} ${u.balance.toLocaleString()}</div>
+            <div style="font-size:12px; background:rgba(0,0,0,0.2); display:inline-block; padding:5px 15px; border-radius:20px;">
+                Status: Verified Account
+            </div>
         </div>
 
         <div class="card">
-            <h3>Deposit / Depósito</h3>
+            <h3 style="margin-top:0">Add Funds</h3>
             <form action="/deposit" method="POST">
-                <input type="number" name="amount" placeholder="Amount ($)" required>
-                <select name="method">
-                    <option value="Mpesa">M-Pesa (+258 855 917 810)</option>
-                    <option value="Bank">Bank Transfer (Capitek)</option>
+                <input type="number" name="amount" placeholder="Amount (${CURRENCY})" required style="margin-bottom:10px;">
+                <select name="method" style="margin-bottom:15px;">
+                    <option value="Mpesa">M-Pesa Express</option>
+                    <option value="Bank">EFT Transfer (Capitec)</option>
                 </select>
-                <button>Initiate Deposit</button>
+                <button>Generate Deposit Reference</button>
             </form>
         </div>
 
-        <div class="card loan-card">
-            <h3>Pawn / SMS Loan (25% Int.)</h3>
-            <p style="font-size:11px;">Term: 14 Days repayment</p>
-            <select id="assetType">
-                <option value="iPhone">iPhone</option><option value="Car">Car</option>
-                <option value="House">House</option><option value="SMS">SMS Loan</option>
-            </select>
-            <input type="number" id="loanAmount" placeholder="Amount ($)">
-            <button type="button" class="btn-pawn" onclick="requestLoan()">Request Quick Cash</button>
-        </div>
-    </div>
-    <script>
-        function requestLoan() {
-            const amt = document.getElementById('loanAmount').value;
-            const item = document.getElementById('assetType').value;
-            const total = (amt * 1.25).toFixed(2);
-            const msg = "MARCHAFÁCIL: I want to pawn my " + item + " for $" + amt + ". Total to pay back in 14 days: $" + total;
-            window.location.href = "${WHATSAPP_LINK}?text=" + encodeURIComponent(msg);
-        }
-    </script></body></html>`);
-});
-
-app.post('/deposit', async (req, res) => {
-    await User.findByIdAndUpdate(req.session.userId, {
-        pendingDeposit: { amount: req.body.amount, method: req.body.method, status: "Pending", date: new Date() }
-    });
-    res.redirect('/pay-now');
-});
-
-app.get('/pay-now', async (req, res) => {
-    const u = await User.findById(req.session.userId);
-    res.send(`<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body>
-    <div class="container" style="text-align:center;">
-        <h2>Complete Payment</h2>
-        <div class="card">
-            <p>Method: <b>${u.pendingDeposit.method}</b></p>
-            <p>Amount: <b>$${u.pendingDeposit.amount}</b></p>
-            <p>${u.pendingDeposit.method === 'Mpesa' ? 'Transfer to: +258 855 917 810' : 'Capitek Acc: 1882242481'}</p>
-        </div>
-        <button onclick="window.location.href='${WHATSAPP_LINK}'" style="background:#25D366">Send Proof (WhatsApp)</button>
+        <button class="btn-outline" onclick="window.location='/logout'">Secure Logout</button>
     </div></body></html>`);
 });
 
 // =============================================================
-// ✅ ADMIN PANEL (Confirmations)
+// ✅ ADMIN INTERFACE
 // =============================================================
 
 app.get('/admin', async (req, res) => {
-    const u = await User.findById(req.session.userId);
-    if (!u || !u.isAdmin) return res.send("Unauthorized. Log in as admin.");
+    if (!req.session.userId || !req.session.isAdmin) return res.redirect('/');
+    
     const pendings = await User.find({ "pendingDeposit.status": "Pending" });
     
     res.send(`<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body>
     <div class="container">
-        <h2 style="color:#ff4444;">Admin Panel</h2>
-        <h3>Pending Deposits</h3>
-        ${pendings.length === 0 ? '<p>No pending deposits</p>' : pendings.map(p => `
-            <div class="card admin-card">
-                <b>User: ${p.email}</b><br>
-                $${p.pendingDeposit.amount} via ${p.pendingDeposit.method}
-                <form action="/admin/confirm-dep" method="POST">
-                    <input type="hidden" name="uid" value="${p._id}">
-                    <button class="btn-admin">Confirm & Start 1-Year Lock (5%)</button>
-                </form>
-            </div>
-        `).join('')}
-        <a href="/dashboard" style="color:white; display:block; margin-top:20px;">Return to User Dashboard</a>
+        <div class="header" style="padding-top:20px;">
+            <div class="logo" style="color:var(--admin)">Admin Control <span class="admin-badge">SYSTEM</span></div>
+        </div>
+
+        <div class="card" style="border-color: var(--admin);">
+            <h3 style="margin-top:0">Pending Approvals (${pendings.length})</h3>
+            ${pendings.length === 0 ? '<p style="color:#8b949e">System clear. No pending tasks.</p>' : pendings.map(p => `
+                <div style="padding:15px; border-bottom:1px solid #30363d; margin-bottom:10px;">
+                    <div style="font-size:14px; font-weight:bold;">${p.email}</div>
+                    <div style="color:var(--primary); font-size:18px; font-weight:800;">${CURRENCY} ${p.pendingDeposit.amount}</div>
+                    <small style="color:#8b949e">Method: ${p.pendingDeposit.method}</small>
+                    <form action="/admin/confirm-dep" method="POST" style="margin-top:10px;">
+                        <input type="hidden" name="uid" value="${p._id}">
+                        <button style="background:var(--admin); color:white; padding:10px; font-size:12px;">Approve & Credit Balance</button>
+                    </form>
+                </div>
+            `).join('')}
+        </div>
+        
+        <button class="btn-outline" onclick="window.location='/dashboard'" style="border-color:#8b949e; color:#8b949e;">View as User</button>
     </div></body></html>`);
 });
 
 app.post('/admin/confirm-dep', async (req, res) => {
+    if (!req.session.isAdmin) return res.send("Denied");
     const u = await User.findById(req.body.uid);
-    if (u && u.pendingDeposit) {
-        const amt = u.pendingDeposit.amount;
-        const expiry = new Date(); expiry.setFullYear(expiry.getFullYear() + 1);
-        u.investments.push({ capital: amt, monthlyProfit: amt * 0.05, lastPayout: new Date(), expiryDate: expiry });
-        u.transactions.push({ type: "Investment Confirmed", amount: amt, date: new Date().toLocaleDateString() });
+    if (u && u.pendingDeposit.status === "Pending") {
+        const amt = parseFloat(u.pendingDeposit.amount);
+        u.balance += amt; // Add to liquid balance
+        u.transactions.push({ type: "Deposit Confirmed", amount: amt, date: new Date().toLocaleDateString() });
         u.pendingDeposit.status = "Confirmed";
         await u.save();
     }
@@ -197,11 +190,14 @@ app.post('/admin/confirm-dep', async (req, res) => {
 });
 
 // =============================================================
-// ✅ SYSTEM MONITORING
+// ✅ INITIALIZATION
 // =============================================================
-process.on('uncaughtException', (err) => {
-    console.error(`!!! CRITICAL ALERT: SERVER CRASH !!! Notify: ${ADMIN_PHONE}`);
-    process.exit(1);
+app.listen(3000, () => {
+    console.log(`
+    🚀 MARCHAFÁCIL SERVER LIVE
+    --------------------------
+    Local: http://localhost:3000
+    Currency: ${CURRENCY}
+    Admin Phone: ${ADMIN_PHONE}
+    `);
 });
-
-app.listen(3000, () => console.log("🚀 MarchaFácil Live on 3000"));
