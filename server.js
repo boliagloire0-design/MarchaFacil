@@ -1,33 +1,62 @@
 const express = require('express');
 const session = require('express-session');
 const mongoose = require('mongoose');
+const PDFDocument = require('pdfkit'); 
 const app = express();
 
 // =============================================================
-// ✅ CONFIGURATION & DATABASE
+// ✅ CONFIGURATION & RULES
 // =============================================================
 const MONGO_URI = "mongodb+srv://Gloirebolia1995:Sheilla9611@cluster0.bem8n8n.mongodb.net/marchafacil?retryWrites=true&w=majority";
-const CURRENCY = "MT"; 
+const REFERRAL_BONUS = 5000;
+const REQUIRED_REFERRALS = 20;
+const MAX_DEPOSIT_FOR_QUALIFY = 20000;
+const CURRENCY = "MT";
 
-mongoose.connect(MONGO_URI).then(() => console.log("✅ MarchaFácil Unified System Online"));
+mongoose.connect(MONGO_URI).then(() => console.log("✅ MarchaFácil: Omni-Bilingual Suite Online"));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(session({ secret: 'marchafacil_omni_2026', resave: false, saveUninitialized: true }));
+app.use(session({ secret: 'marchafacil_ultimate_2026', resave: false, saveUninitialized: true }));
+
+// =============================================================
+// ✅ TRANSLATIONS DICTIONARY
+// =============================================================
+const i18n = {
+    pt: {
+        welcome: "BEM-VINDO", login: "Entrar", signup: "Criar conta", email: "Email", pin: "PIN",
+        balance: "SALDO", deposit: "Depositar", amount: "Valor", request: "Solicitar", logout: "Sair",
+        agent_panel: "Painel de Agente", confirm: "Confirmar", reject: "Rejeitar", reason: "Motivo",
+        pending: "Pendentes", lang: "English", history: "Histórico", download: "Recibo PDF",
+        reject_msg: "Depósito Rejeitado", csv: "Exportar CSV", lend: "Emprestar ao Sistema (10%)",
+        profit_msg: "Rendimento em:", days: "dias", total_liq: "LIQUIDEZ TOTAL"
+    },
+    en: {
+        welcome: "WELCOME", login: "Login", signup: "Sign Up", email: "Email", pin: "PIN",
+        balance: "BALANCE", deposit: "Deposit", amount: "Amount", request: "Request", logout: "Logout",
+        agent_panel: "Agent Panel", confirm: "Confirm", reject: "Reject", reason: "Reason",
+        pending: "Pending", lang: "Português", history: "History", download: "PDF Receipt",
+        reject_msg: "Deposit Rejected", csv: "Export CSV", lend: "Lend to System (10%)",
+        profit_msg: "Profit in:", days: "days", total_liq: "TOTAL LIQUIDITY"
+    }
+};
 
 // =============================================================
 // ✅ DATA SCHEMA
 // =============================================================
 const userSchema = new mongoose.Schema({
     email: { type: String, unique: true, required: true },
+    name: String,
     passcode: String,
     balance: { type: Number, default: 0 },
     isAdmin: { type: Boolean, default: false },
     isAgent: { type: Boolean, default: false },
-    lastProfitDate: { type: Date, default: Date.now }, 
+    lastProfitDate: { type: Date, default: Date.now },
     agentLendingBalance: { type: Number, default: 0 },
-    agentLendingDate: Date, 
-    pendingDeposit: { amount: Number, method: String, status: String, date: Date },
+    agentLendingDate: Date,
+    referredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    qualifiedReferrals: { type: Number, default: 0 },
+    pendingDeposit: { amount: Number, status: String, reason: String, date: Date },
     transactions: [{ type: { type: String }, amount: Number, fee: { type: Number, default: 0 }, date: String }]
 });
 const User = mongoose.model('User', userSchema);
@@ -39,212 +68,216 @@ const css = `
 :root { --primary: #00e676; --bg: #0a0c10; --card: #161b22; --text: #f0f6fc; --admin: #f85149; --warn: #ffbb33; --agent: #2196f3; }
 * { box-sizing: border-box; font-family: 'Segoe UI', sans-serif; } 
 body { background: var(--bg); color: var(--text); margin: 0; padding-bottom: 40px; } 
-.container { padding: 20px; max-width: 450px; margin: 0 auto; } 
-.card { background: var(--card); padding: 20px; border-radius: 16px; border: 1px solid #30363d; margin-bottom: 20px; } 
-.balance-card { background: linear-gradient(135deg, #00c853 0%, #007e33 100%); color: white; border-radius: 24px; padding: 25px; text-align: center; margin-bottom: 20px; } 
-.agent-card { background: linear-gradient(135deg, #2196f3 0%, #1565c0 100%); color: white; border-radius: 24px; padding: 25px; text-align: center; margin-bottom: 20px; }
-button { width: 100%; padding: 16px; background: var(--primary); border: none; font-weight: 700; border-radius: 12px; cursor: pointer; margin-top: 10px; color: #000; }
-input, select { width: 100%; padding: 14px; background: #010409; border: 1px solid #30363d; color: white; border-radius: 8px; margin-bottom: 10px; }
-.badge { font-size: 10px; padding: 4px 8px; border-radius: 4px; font-weight: bold; margin-bottom: 10px; display: inline-block; }
-.maturity-tag { font-size: 11px; background: rgba(0,0,0,0.3); padding: 4px 10px; border-radius: 10px; margin-top: 8px; display: inline-block; color: #fff; }
+.container { padding: 20px; max-width: 480px; margin: 0 auto; } 
+.card { background: var(--card); padding: 20px; border-radius: 16px; border: 1px solid #30363d; margin-bottom: 15px; } 
+.balance-card { background: linear-gradient(135deg, #00c853 0%, #007e33 100%); color: white; border-radius: 20px; padding: 25px; text-align: center; } 
+.agent-card { background: linear-gradient(135deg, #2196f3 0%, #1565c0 100%); color: white; border-radius: 20px; padding: 25px; text-align: center; margin-bottom: 15px; }
+button { width: 100%; padding: 15px; background: var(--primary); border: none; font-weight: 700; border-radius: 10px; cursor: pointer; color: #000; margin-top: 10px; }
+.btn-small { padding: 5px 10px; font-size: 11px; width: auto; background: #333; color: white; border: 1px solid #444; }
+input, select { width: 100%; padding: 12px; background: #010409; border: 1px solid #30363d; color: white; border-radius: 8px; margin-bottom: 10px; }
+.lang-toggle { background: transparent; color: #8b949e; border: 1px solid #333; padding: 5px 15px; border-radius: 20px; font-size: 11px; cursor: pointer; float: right; }
 `;
 
 // =============================================================
-// ✅ PUBLIC ROUTES (LOGIN & RECEIPTS)
+// ✅ HELPERS & MIDDLEWARE
 // =============================================================
+const getT = (req) => i18n[req.session.lang || 'pt'];
 
-app.get('/', (req, res) => {
-    res.send(`<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head>
-    <body style="display:flex; align-items:center; justify-content:center; height:100vh;"><div class="container">
-        <h1 style="text-align:center; color:var(--primary); letter-spacing:-1px;">MARCHAFÁCIL</h1>
-        <div class="card"><form action="/login" method="POST">
-            <input type="email" name="email" placeholder="Email" required>
-            <input type="password" name="passcode" placeholder="PIN" required>
-            <button>Entrar no Sistema</button>
-        </form></div>
-    </div></body></html>`);
-});
-
-app.post('/login', async (req, res) => {
-    const user = await User.findOne({ email: req.body.email.toLowerCase() });
-    if (user && user.passcode === req.body.passcode) {
-        req.session.userId = user._id;
-        req.session.isAdmin = user.isAdmin;
-        req.session.isAgent = user.isAgent;
-        if (user.isAdmin) return res.redirect('/admin');
-        if (user.isAgent) return res.redirect('/agent');
-        return res.redirect('/dashboard');
-    }
-    res.send("<script>alert('Acesso Negado'); window.location='/';</script>");
-});
-
-app.get('/receipt', (req, res) => {
-    const { type, amount, fee } = req.query;
-    res.send(`<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body>
-    <div class="container" style="text-align:center; padding-top:50px;">
-        <div class="card" style="border: 2px solid var(--primary);">
-            <h2 style="color:var(--primary)">RECIBO</h2>
-            <p>Operação: <b>${type}</b></p>
-            <p>Valor: <b>${amount} ${CURRENCY}</b></p>
-            ${fee > 0 ? `<p>Taxa: <b>${fee} ${CURRENCY}</b></p>` : ''}
-            <button onclick="window.location='/dashboard'">Fechar</button>
-        </div>
-    </div></body></html>`);
+app.get('/toggle-lang', (req, res) => {
+    req.session.lang = req.session.lang === 'en' ? 'pt' : 'en';
+    res.redirect('back');
 });
 
 // =============================================================
-// ✅ USER DASHBOARD (5% View)
+// ✅ PDF RECEIPT ENGINE
 // =============================================================
+app.get('/receipt/:txIndex', async (req, res) => {
+    if (!req.session.userId) return res.redirect('/');
+    const u = await User.findById(req.session.userId);
+    const tx = u.transactions[req.params.txIndex];
+    if (!tx) return res.send("Not found");
 
+    const doc = new PDFDocument();
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=Receipt_${tx.date}.pdf`);
+    doc.pipe(res);
+    doc.fontSize(22).fillColor('#00e676').text('MARCHAFÁCIL', { align: 'center' });
+    doc.fontSize(10).fillColor('black').text('Official Digital Receipt', { align: 'center' });
+    doc.moveDown();
+    doc.fontSize(12).text(`User: ${u.email}`);
+    doc.text(`Operation: ${tx.type}`);
+    doc.text(`Amount: ${tx.amount} ${CURRENCY}`);
+    doc.text(`Fee: ${tx.fee || 0} ${CURRENCY}`);
+    doc.text(`Date: ${tx.date}`);
+    doc.moveDown();
+    doc.fontSize(8).text('MarchaFácil © 2026 - Maputo, MZ', { align: 'center' });
+    doc.end();
+});
+
+// =============================================================
+// ✅ DASHBOARD (Standard 5% View)
+// =============================================================
 app.get('/dashboard', async (req, res) => {
     if (!req.session.userId) return res.redirect('/');
     const u = await User.findById(req.session.userId);
+    const t = getT(req);
     const daysLeft = 30 - Math.floor((new Date() - new Date(u.lastProfitDate)) / (1000 * 60 * 60 * 24));
 
     res.send(`<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body>
     <div class="container">
+        <button class="lang-toggle" onclick="window.location='/toggle-lang'">${t.lang}</button>
         <div class="balance-card">
-            <small>MEU SALDO</small>
-            <div style="font-size:38px; font-weight:800; margin:5px 0;">${u.balance.toLocaleString()} ${CURRENCY}</div>
-            <div class="maturity-tag">Próximo rendimento: ${daysLeft > 0 ? daysLeft : 0} dias</div>
+            <small>${t.balance}</small>
+            <h1>${u.balance.toLocaleString()} ${CURRENCY}</h1>
+            <div style="font-size:11px;">${t.profit_msg} ${daysLeft > 0 ? daysLeft : 0} ${t.days}</div>
         </div>
-        ${u.pendingDeposit?.status === 'Pending' ? `<div class="card" style="border:1px dashed var(--warn); color:var(--warn); text-align:center;">Depósito de ${u.pendingDeposit.amount} em verificação...</div>` : ''}
+
+        ${u.pendingDeposit?.status === 'Rejected' ? `<div class="card" style="color:var(--admin)"><b>${t.reject_msg}:</b> ${u.pendingDeposit.reason}</div>` : ''}
+
         <div class="card">
-            <h3>Operações</h3>
-            <form action="/deposit" method="POST"><input type="number" name="amount" placeholder="Depositar Valor" required><button>Pedir Depósito</button></form>
-            <form action="/withdraw" method="POST" style="margin-top:10px;"><input type="number" name="amount" placeholder="Levantar Valor" required><select name="method"><option value="Bank">Banco (Grátis)</option><option value="Mpesa">M-Pesa (250 MT)</option></select><button style="background:var(--warn)">Levantar</button></form>
+            <h3>${t.deposit}</h3>
+            <form action="/deposit" method="POST"><input type="number" name="amount" required><button>${t.request}</button></form>
         </div>
+
         <div class="card">
-            <h3>Histórico</h3>
-            ${u.transactions.slice(-5).reverse().map(t => `<div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #333; font-size:13px;"><span>${t.type}</span><b>${t.amount} MT</b></div>`).join('')}
+            <h3>${t.history}</h3>
+            ${u.transactions.slice(-4).reverse().map((tx, i) => `
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid #333;">
+                    <span style="font-size:13px;">${tx.type}<br><small>${tx.date}</small></span>
+                    <button class="btn-small" onclick="window.location='/receipt/${u.transactions.length - 1 - i}'">PDF</button>
+                </div>
+            `).join('')}
         </div>
-        <button onclick="window.location='/logout'" style="background:transparent; border:1px solid #444; color:white">Sair</button>
+
+        ${u.isAgent || u.isAdmin ? `<button onclick="window.location='/agent'" style="background:var(--agent); color:white">${t.agent_panel}</button>` : ''}
+        <button onclick="window.location='/logout'" style="background:transparent; border:1px solid #444; color:white">${t.logout}</button>
     </div></body></html>`);
 });
 
 // =============================================================
-// ✅ AGENT PANEL (10% Lending & Client Validation)
+// ✅ AGENT PANEL (10% Lending + Referrals)
 // =============================================================
-
 app.get('/agent', async (req, res) => {
     if (!req.session.isAgent && !req.session.isAdmin) return res.redirect('/');
     const u = await User.findById(req.session.userId);
+    const t = getT(req);
     const pendings = await User.find({ "pendingDeposit.status": "Pending" });
-    const agentDays = 30 - Math.floor((new Date() - new Date(u.agentLendingDate || u.lastProfitDate)) / (1000 * 60 * 60 * 24));
 
     res.send(`<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body>
     <div class="container">
-        <div class="badge" style="background:var(--agent); color:white;">AGENTE</div>
+        <button class="lang-toggle" onclick="window.location='/toggle-lang'">${t.lang}</button>
         <div class="agent-card">
-            <small>VALOR EMPRESTADO AO SISTEMA</small>
-            <div style="font-size:32px; font-weight:900;">${u.agentLendingBalance.toLocaleString()} ${CURRENCY}</div>
-            <div class="maturity-tag">Ciclo de 10%: ${agentDays > 0 ? agentDays : 0} dias restantes</div>
+            <small>${t.lend}</small>
+            <h2>${u.agentLendingBalance.toLocaleString()} ${CURRENCY}</h2>
+            <div style="font-size:11px;">Ref: ${u.qualifiedReferrals}/20 (${t.amount} <= 20k)</div>
         </div>
-        <div class="card" style="border-color:var(--agent)">
-            <h3>Emprestar ao MarchaFácil (10%)</h3>
-            <form action="/agent/lend" method="POST"><input type="number" name="amount" placeholder="Valor" required><button style="background:var(--agent); color:white">Investir Capital</button></form>
+
+        <h3>${t.pending}</h3>
+        ${pendings.map(p => `
+            <div class="card">
+                <b>${p.email}</b> | ${p.pendingDeposit.amount} ${CURRENCY}
+                <form action="/confirm-deposit" method="POST">
+                    <input type="hidden" name="uid" value="${p._id}">
+                    <button type="submit">${t.confirm}</button>
+                </form>
+                <form action="/reject-deposit" method="POST" style="margin-top:5px;">
+                    <input type="hidden" name="uid" value="${p._id}">
+                    <input type="text" name="reason" placeholder="${t.reason}" required>
+                    <button type="submit" style="background:var(--admin); color:white">${t.reject}</button>
+                </form>
+            </div>
+        `).join('')}
+        
+        <div class="card">
+            <h3>Invest Capital (10%)</h3>
+            <form action="/agent/lend" method="POST"><input type="number" name="amount" placeholder="${t.amount}"><button style="background:var(--agent); color:white">Lend</button></form>
         </div>
-        <h3>Validações Pendentes</h3>
-        ${pendings.length === 0 ? '<p>Nenhum pedido.</p>' : pendings.map(p => `<div class="card"><b>${p.email}</b><br>${p.pendingDeposit.amount} MT<form action="/confirm-action" method="POST" style="margin-top:10px;"><input type="hidden" name="uid" value="${p._id}"><button>Validar Recebimento</button></form></div>`).join('')}
-        <button onclick="window.location='/dashboard'" style="background:transparent; border:1px solid #444; color:white">Meu Dashboard</button>
+        <button onclick="window.location='/dashboard'">Back</button>
     </div></body></html>`);
 });
 
 // =============================================================
-// ✅ ADMIN PANEL (Profit Distro & Loan Approval)
+// ✅ SYSTEM LOGIC (Referrals, Rejection, Lending)
 // =============================================================
 
-app.get('/admin', async (req, res) => {
-    if (!req.session.isAdmin) return res.redirect('/');
-    const users = await User.find({});
-    const totalLiq = users.reduce((a, b) => a + b.balance + b.agentLendingBalance, 0);
+app.post('/confirm-deposit', async (req, res) => {
+    const u = await User.findById(req.body.uid);
+    if (u && u.pendingDeposit.status === "Pending") {
+        const amt = u.pendingDeposit.amount;
+        u.balance += amt;
+        u.pendingDeposit = { status: "Confirmed", date: new Date() };
+        u.transactions.push({ type: "Depósito", amount: amt, date: new Date().toLocaleDateString() });
+        await u.save();
 
-    res.send(`<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body>
-    <div class="container">
-        <div class="badge" style="background:var(--admin); color:white;">ADMIN</div>
-        <div class="card" style="background:var(--admin); text-align:center;">
-            <small>LIQUIDEZ TOTAL DO SISTEMA</small>
-            <div style="font-size:30px; font-weight:bold;">${totalLiq.toLocaleString()} ${CURRENCY}</div>
-        </div>
-        <div class="card" style="border-color:var(--warn)">
-            <h3>Aprovar Empréstimo WhatsApp</h3>
-            <form action="/approve-loan" method="POST"><input type="text" name="email" placeholder="Email Cliente"><input type="number" name="amount" placeholder="Valor"><button style="background:var(--warn); color:black">Lançar Empréstimo</button></form>
-        </div>
-        <button onclick="window.location='/distribute-profit'" style="background:#4caf50;">Pagar Lucros Mensais (30 Dias)</button>
-        <button onclick="window.location='/agent'" class="badge" style="background:var(--agent); color:white; margin-top:10px; width:100%; border:none; padding:15px;">Ir para Validações (Modo Agente)</button>
-        <button onclick="window.location='/logout'" style="background:transparent; border:1px solid #444; color:white; margin-top:10px;">Logout</button>
-    </div></body></html>`);
-});
-
-// =============================================================
-// ✅ SYSTEM LOGIC (Transactions & Profits)
-// =============================================================
-
-app.get('/distribute-profit', async (req, res) => {
-    if (!req.session.isAdmin) return res.send("Denied");
-    const all = await User.find({});
-    const now = new Date();
-    let count = 0;
-    for (let u of all) {
-        let up = false;
-        const days = (d) => Math.floor((now - new Date(d)) / (1000 * 60 * 60 * 24));
-        if (u.balance > 0 && days(u.lastProfitDate) >= 30) {
-            u.balance += (u.balance * 0.05); u.lastProfitDate = now;
-            u.transactions.push({ type: "Lucro Mensal 5%", amount: u.balance * 0.05, date: now.toLocaleDateString() });
-            up = true;
+        // Bonus Logic: Max 20,000 MT per person
+        if (u.referredBy && amt <= MAX_DEPOSIT_FOR_QUALIFY) {
+            const agent = await User.findById(u.referredBy);
+            if (agent) {
+                agent.qualifiedReferrals += 1;
+                if (agent.qualifiedReferrals === REQUIRED_REFERRALS) {
+                    agent.balance += REFERRAL_BONUS;
+                    agent.transactions.push({ type: "BONUS 20 REF 🎁", amount: REFERRAL_BONUS, date: new Date().toLocaleDateString() });
+                }
+                await agent.save();
+            }
         }
-        if (u.isAgent && u.agentLendingBalance > 0 && days(u.agentLendingDate || u.lastProfitDate) >= 30) {
-            u.balance += (u.agentLendingBalance * 0.10); u.agentLendingDate = now;
-            u.transactions.push({ type: "Lucro Agente 10%", amount: u.agentLendingBalance * 0.10, date: now.toLocaleDateString() });
-            up = true;
-        }
-        if (up) { await u.save(); count++; }
     }
-    res.send(`<script>alert('Maturidade atingida em ${count} contas.'); window.location='/admin';</script>`);
+    res.redirect('/agent');
+});
+
+app.post('/reject-deposit', async (req, res) => {
+    await User.findByIdAndUpdate(req.body.uid, { 
+        "pendingDeposit.status": "Rejected", 
+        "pendingDeposit.reason": req.body.reason 
+    });
+    res.redirect('/agent');
 });
 
 app.post('/agent/lend', async (req, res) => {
     const u = await User.findById(req.session.userId);
     const amt = parseFloat(req.body.amount);
-    if (u.balance < amt) return res.send("Saldo Insuficiente");
-    u.balance -= amt; u.agentLendingBalance += amt; u.agentLendingDate = new Date();
-    await u.save(); res.redirect('/agent');
-});
-
-app.post('/confirm-action', async (req, res) => {
-    const u = await User.findById(req.body.uid);
-    if (u && u.pendingDeposit.status === "Pending") {
-        const amt = parseFloat(u.pendingDeposit.amount);
-        u.balance += amt; u.pendingDeposit.status = "Confirmed";
-        u.transactions.push({ type: "Depósito Confirmado", amount: amt, date: new Date().toLocaleDateString() });
-        await u.save(); res.redirect('/agent');
+    if (u.balance >= amt) {
+        u.balance -= amt; u.agentLendingBalance += amt; u.agentLendingDate = new Date();
+        await u.save();
     }
+    res.redirect('/agent');
 });
 
-app.post('/approve-loan', async (req, res) => {
-    const u = await User.findOne({ email: req.body.email.toLowerCase() });
+// =============================================================
+// ✅ AUTH & PUBLIC
+// =============================================================
+app.get('/', (req, res) => {
+    const t = getT(req);
+    res.send(`<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head>
+    <body style="display:flex; align-items:center;"><div class="container">
+        <button class="lang-toggle" onclick="window.location='/toggle-lang'">${t.lang}</button>
+        <h1 style="text-align:center; color:var(--primary)">MARCHAFÁCIL</h1>
+        <div class="card"><form action="/login" method="POST">
+            <input type="email" name="email" placeholder="Email" required>
+            <input type="password" name="passcode" placeholder="PIN" required>
+            <button>${t.login}</button>
+        </form></div>
+    </div></body></html>`);
+});
+
+app.post('/login', async (req, res) => {
+    const u = await User.findOne({ email: req.body.email.toLowerCase(), passcode: req.body.passcode });
     if (u) {
-        const amt = parseFloat(req.body.amount);
-        u.balance += amt; u.transactions.push({ type: "Empréstimo WhatsApp ✅", amount: amt, date: new Date().toLocaleDateString() });
-        await u.save(); res.redirect('/admin');
+        req.session.userId = u._id;
+        req.session.isAdmin = u.isAdmin;
+        req.session.isAgent = u.isAgent;
+        return res.redirect('/dashboard');
     }
+    res.send("Error");
 });
 
 app.post('/deposit', async (req, res) => {
-    await User.findByIdAndUpdate(req.session.userId, { pendingDeposit: { amount: req.body.amount, status: "Pending", date: new Date() } });
+    await User.findByIdAndUpdate(req.session.userId, { 
+        pendingDeposit: { amount: parseFloat(req.body.amount), status: "Pending", date: new Date() } 
+    });
     res.redirect('/dashboard');
-});
-
-app.post('/withdraw', async (req, res) => {
-    const u = await User.findById(req.session.userId);
-    const fee = req.body.method === 'Mpesa' ? 250 : 0;
-    const amt = parseFloat(req.body.amount);
-    if (u.balance < (amt + fee)) return res.send("Saldo insuficiente");
-    u.balance -= (amt + fee);
-    u.transactions.push({ type: `Saída (${req.body.method})`, amount: -amt, fee, date: new Date().toLocaleDateString() });
-    await u.save(); res.redirect(`/receipt?type=Levantamento&amount=${amt}&fee=${fee}`);
 });
 
 app.get('/logout', (req, res) => { req.session.destroy(); res.redirect('/'); });
 
-app.listen(3000, () => console.log("🚀 MarchaFácil Omni-System Live"));
+app.listen(3000, () => console.log("🚀 MarchaFácil Omni-Suite Live on Port 3000"));
