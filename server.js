@@ -10,10 +10,10 @@ const MONGO_URI = "mongodb+srv://Gloirebolia1995:Sheilla9611@cluster0.bem8n8n.mo
 const CURRENCY = "MT";
 const LOCK_DAYS = 30;
 
-const USER_PROFIT_RATE = 0.05;   // 5% Monthly for standard users
-const AGENT_TOTAL_YIELD = 0.10;  // 10% Monthly for Agents (5% Spread + 5% Maturity)
-const SMS_LOAN_14_DAYS = 0.35;   // 35% Interest
-const SMS_LOAN_30_DAYS = 0.40;   // 40% Interest
+const USER_PROFIT_RATE = 0.05;   
+const AGENT_TOTAL_YIELD = 0.10;  
+const SMS_LOAN_14_DAYS = 0.35;   
+const SMS_LOAN_30_DAYS = 0.40;   
 
 const AGENT_WHATSAPP = "258840000000"; 
 
@@ -53,8 +53,8 @@ const loanSchema = new mongoose.Schema({
 const Loan = mongoose.model('Loan', loanSchema);
 
 const i18n = {
-    pt: { balance: "LUCRO DISPONÍVEL", locked: "CAPITAL INVESTIDO", deposit: "Investir via M-Pesa", lang: "English", maturity: "Maturidade", sms: "Empréstimo Rápido" },
-    en: { balance: "AVAILABLE PROFIT", locked: "LOCKED CAPITAL", deposit: "Invest via M-Pesa", lang: "Português", maturity: "Maturity", sms: "SMS Loan" }
+    pt: { balance: "LUCRO DISPONÍVEL", total: "TOTAL DE ATIVOS", locked: "CAPITAL INVESTIDO", deposit: "Investir via M-Pesa", lang: "English", maturity: "Maturidade", sms: "Empréstimo Rápido" },
+    en: { balance: "AVAILABLE PROFIT", total: "TOTAL ASSETS", locked: "LOCKED CAPITAL", deposit: "Invest via M-Pesa", lang: "Português", maturity: "Maturity", sms: "SMS Loan" }
 };
 const getT = (req) => i18n[req.session.lang || 'pt'];
 
@@ -73,7 +73,7 @@ button { width: 100%; padding: 16px; background: var(--primary); border: none; f
 `;
 
 // =============================================================
-// ✅ CORE ROUTES (Login & Dashboard)
+// ✅ CORE USER ROUTES
 // =============================================================
 
 app.get('/', (req, res) => {
@@ -103,9 +103,11 @@ app.get('/dashboard', async (req, res) => {
     let maturityReached = false;
     if (u.lastDepositDate) {
         const diffDays = Math.floor(Math.abs(new Date() - u.lastDepositDate) / (1000 * 60 * 60 * 24));
-        daysRemaining = LOCK_DAYS - diffDays;
-        if (daysRemaining <= 0) { daysRemaining = 0; maturityReached = true; }
+        daysRemaining = Math.max(0, LOCK_DAYS - diffDays);
+        if (daysRemaining <= 0) maturityReached = true;
     }
+
+    const totalAssets = u.balance + u.lockedPrincipal;
 
     res.send(`<html><head><meta name="viewport" content="width=device-width,initial-scale=1">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"><style>${css}</style></head>
@@ -116,14 +118,27 @@ app.get('/dashboard', async (req, res) => {
         </div>
 
         <div class="smart-balance">
-            <span>${t.balance}</span>
-            <h1>${u.balance.toLocaleString()} MT</h1>
+            <span>${t.total}</span>
+            <h1>${totalAssets.toLocaleString()} MT</h1>
+            <small style="opacity:0.7;">${t.balance}: ${u.balance.toLocaleString()} MT</small>
         </div>
 
         <div class="locked-box">
             <div><small>${t.locked}</small><br><b>${u.lockedPrincipal.toLocaleString()} MT</b></div>
-            <div style="text-align:right"><small>${t.maturity}</small><br><b style="color:var(--primary)">${maturityReached ? 'READY' : daysRemaining + ' Days'}</b></div>
+            <div style="text-align:right">
+                <small>${t.maturity}</small><br>
+                <b style="color:${maturityReached ? 'var(--primary)' : '#ffab40'}">
+                    ${maturityReached ? 'COMPLETED' : daysRemaining + ' Days Left'}
+                </b>
+            </div>
         </div>
+
+        ${maturityReached && totalAssets > 0 ? `
+            <div class="card" style="border: 1px solid var(--primary); background: rgba(0,230,118,0.1);">
+                <p style="margin:0 0 10px 0; font-size:13px;">Investment matured! You can now request withdrawal.</p>
+                <button onclick="window.location='/request-withdrawal'">Withdraw Funds</button>
+            </div>
+        ` : ''}
 
         <div class="card" style="border: 1px solid var(--loan);">
             <h3 style="color:var(--loan); margin-top:0;"><i class="fa fa-bolt"></i> ${t.sms}</h3>
@@ -146,106 +161,13 @@ app.get('/dashboard', async (req, res) => {
             </form>
         </div>
 
-        ${u.isAdmin ? `<button onclick="window.location='/admin'" style="margin-top:20px; background:var(--primary); color:#000;">OPEN ADMIN TREASURY</button>` : ''}
-        ${u.isAgent || u.isAdmin ? `<button onclick="window.location='/agent'" style="margin-top:10px; background:#fff; color:#000;">OPEN AGENT PANEL</button>` : ''}
+        ${u.isAdmin ? `<button onclick="window.location='/admin'" style="margin-top:20px; background:var(--primary); color:#000;">ADMIN DASHBOARD</button>` : ''}
+        ${u.isAgent && !u.isAdmin ? `<button onclick="window.location='/agent'" style="margin-top:10px; background:#fff; color:#000;">AGENT PANEL</button>` : ''}
     </div></body></html>`);
 });
 
 // =============================================================
-// ✅ AGENT PANEL & COMMISSION MANAGEMENT
-// =============================================================
-
-app.get('/agent', async (req, res) => {
-    const u = await User.findById(req.session.userId);
-    if (!u.isAgent && !u.isAdmin) return res.send("Denied");
-    const pendings = await User.find({ "pendingDeposit.status": "Pending" });
-
-    res.send(`<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head>
-    <body><div class="container">
-        <h2>Agent Dashboard</h2>
-        
-        <div class="locked-box" style="margin-bottom:10px;">
-            <div><small>Spread Balance (5%)</small><br><b style="color:var(--primary)">${u.agentCommissionBalance.toLocaleString()} MT</b></div>
-            <button onclick="window.location='/agent/withdraw-commission'" style="width:auto; padding:8px 15px; font-size:11px; background:var(--primary);">Withdraw</button>
-        </div>
-
-        <div style="display:flex; gap:10px; margin-bottom:20px;">
-            <button onclick="window.location='/agent'" style="background:var(--primary); font-size:12px;">Approvals</button>
-            <button onclick="window.location='/agent/manage-loans'" style="background:var(--surface); color:#fff; font-size:12px;">Manage Loans</button>
-        </div>
-
-        <h3>Pending Approvals</h3>
-        ${pendings.length === 0 ? '<p>No pendings found.</p>' : pendings.map(p => `
-            <div class="card">
-                <b>User: ${p.name}</b><br>Deposit: ${p.pendingDeposit.amount} MT<br>
-                <form action="/approve-deposit" method="POST" style="margin-top:10px;">
-                    <input type="hidden" name="userId" value="${p._id}">
-                    <button>Approve & Earn Spread</button>
-                </form>
-            </div>`).join('')}
-        <button onclick="window.location='/dashboard'" style="background:none; color:#fff; margin-top:20px;">Back to Home</button>
-    </div></body></html>`);
-});
-
-app.get('/agent/withdraw-commission', async (req, res) => {
-    const u = await User.findById(req.session.userId);
-    res.send(`<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head>
-    <body><div class="container">
-        <h2 style="color:var(--primary)">Withdraw Spread</h2>
-        <div class="card">
-            <small>Available Commission</small><h1>${u.agentCommissionBalance.toLocaleString()} MT</h1>
-        </div>
-        <form action="/agent/request-commission" method="POST">
-            <input type="number" name="amount" max="${u.agentCommissionBalance}" placeholder="Amount" required>
-            <input type="text" name="mpesa" placeholder="M-Pesa Number" required>
-            <button style="background:#fff; color:#000;">Request via WhatsApp</button>
-        </form>
-        <button onclick="window.location='/agent'" style="background:none; color:#fff; margin-top:20px;">Back</button>
-    </div></body></html>`);
-});
-
-app.post('/agent/request-commission', async (req, res) => {
-    const u = await User.findById(req.session.userId);
-    const amount = parseFloat(req.body.amount);
-    if (amount <= u.agentCommissionBalance) {
-        u.agentCommissionBalance -= amount;
-        await u.save();
-        const msg = `SOLICITAÇÃO DE COMISSÃO%0AAgente: ${u.name}%0AValor: ${amount} MT%0AMpesa: ${req.body.mpesa}`;
-        res.send(`<script>window.location.href="https://wa.me/${AGENT_WHATSAPP}?text=${msg}";</script>`);
-    } else { res.redirect('/agent'); }
-});
-
-// =============================================================
-// ✅ LOAN MANAGEMENT (Agent View)
-// =============================================================
-
-app.get('/agent/manage-loans', async (req, res) => {
-    const u = await User.findById(req.session.userId);
-    const myLoans = await Loan.find({ agentId: u._id });
-    res.send(`<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head>
-    <body><div class="container">
-        <h2>Loan Tracker</h2>
-        ${myLoans.map(l => `
-            <div class="card" style="border-left: 5px solid ${l.status === 'Active' ? '#ffab40' : '#00e676'}">
-                <span class="badge" style="background:${l.status === 'Active' ? '#ffab40' : '#00e676'}">${l.status}</span>
-                <b>${l.borrowerName}</b><br>Repay: ${l.repayment} MT<br>
-                ${l.status === 'Active' ? `
-                    <form action="/agent/update-loan" method="POST" style="margin-top:10px;">
-                        <input type="hidden" name="loanId" value="${l._id}">
-                        <button name="status" value="Paid" style="padding:10px; font-size:12px;">Mark Paid</button>
-                    </form>` : ''}
-            </div>`).join('')}
-        <button onclick="window.location='/agent'" style="background:none; color:#fff; margin-top:20px;">Back</button>
-    </div></body></html>`);
-});
-
-app.post('/agent/update-loan', async (req, res) => {
-    await Loan.findByIdAndUpdate(req.body.loanId, { status: req.body.status });
-    res.redirect('/agent/manage-loans');
-});
-
-// =============================================================
-// ✅ SYSTEM LOGIC (Approval & Admin)
+// ✅ UPDATED AGENT LOGIC (Instant Balance Injection)
 // =============================================================
 
 app.post('/approve-deposit', async (req, res) => {
@@ -254,6 +176,7 @@ app.post('/approve-deposit', async (req, res) => {
 
     if (user && user.pendingDeposit.status === "Pending") {
         const amount = user.pendingDeposit.amount;
+
         await Loan.create({
             borrowerName: user.name,
             borrowerId: user._id,
@@ -262,34 +185,75 @@ app.post('/approve-deposit', async (req, res) => {
             dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
             agentId: agent._id
         });
-        user.lockedPrincipal += amount;
-        user.lastDepositDate = new Date();
+
+        // Add to balance for immediate UI reflection
+        user.balance += amount; 
         user.pendingDeposit.status = "Completed";
+        user.lastDepositDate = new Date();
         await user.save();
-        agent.agentCommissionBalance += (amount * 0.05); // The 5% spread
+
+        // Pay agent their 5% spread
+        agent.agentCommissionBalance += (amount * 0.05);
         await agent.save();
     }
-    res.redirect('/agent');
+    res.redirect('back');
 });
+
+// =============================================================
+// ✅ MASTER ADMIN DASHBOARD (Overseas everything)
+// =============================================================
 
 app.get('/admin', async (req, res) => {
     const u = await User.findById(req.session.userId);
     if (!u.isAdmin) return res.send("Denied");
+
+    const allUsers = await User.find({});
     const allLoans = await Loan.find({});
+    const pendings = await User.find({ "pendingDeposit.status": "Pending" });
+
     const totalLent = allLoans.reduce((s, l) => s + l.amount, 0);
-    const realized = allLoans.filter(l => l.status === 'Paid').reduce((s, l) => s + (l.repayment - l.amount), 0);
+    const totalProfit = allLoans.filter(l => l.status === 'Paid').reduce((s, l) => s + (l.repayment - l.amount), 0);
+
     res.send(`<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head>
     <body><div class="container">
-        <h2 style="color:var(--primary)">Treasury</h2>
-        <div class="card"><small>Circulation</small><h1>${totalLent.toLocaleString()} MT</h1>
-        <small>Profit</small><h2 style="color:var(--primary)">+ ${realized.toLocaleString()} MT</h2></div>
-        <button onclick="window.location='/dashboard'" style="background:none; color:#fff; margin-top:20px;">Exit</button>
+        <h2 style="color:var(--primary)">Admin Treasury</h2>
+        
+        <div class="card">
+            <small>Active Circulation</small><h1>${totalLent.toLocaleString()} MT</h1>
+            <small>Realized Interest</small><h2 style="color:var(--primary)">+ ${totalProfit.toLocaleString()} MT</h2>
+        </div>
+
+        <h3>Pending Deposits (${pendings.length})</h3>
+        ${pendings.map(p => `
+            <div class="card">
+                <b>${p.name}</b>: ${p.pendingDeposit.amount} MT<br>
+                <form action="/approve-deposit" method="POST" style="margin-top:10px;">
+                    <input type="hidden" name="userId" value="${p._id}">
+                    <button>Approve Deposit</button>
+                </form>
+            </div>`).join('')}
+
+        <h3>Active SMS Loans</h3>
+        ${allLoans.map(l => `
+            <div class="card" style="font-size:12px;">
+                <b>${l.borrowerName}</b> | Repay: ${l.repayment} MT<br>
+                Status: <span style="color:var(--primary)">${l.status}</span>
+            </div>`).join('')}
+
+        <button onclick="window.location='/dashboard'" style="background:none; color:#fff; border:1px solid #333; margin-top:20px;">Exit Admin</button>
     </div></body></html>`);
 });
 
 // =============================================================
-// ✅ UTILS
+// ✅ WITHDRAWAL & HELPERS
 // =============================================================
+
+app.get('/request-withdrawal', async (req, res) => {
+    const u = await User.findById(req.session.userId);
+    const msg = `SOLICITAÇÃO DE SAQUE (MATURIDADE)%0ACliente: ${u.name}%0AValor Total: ${u.balance + u.lockedPrincipal} MT`;
+    res.send(`<script>window.location.href="https://wa.me/${AGENT_WHATSAPP}?text=${msg}";</script>`);
+});
+
 app.post('/apply-sms-loan', async (req, res) => {
     const u = await User.findById(req.session.userId);
     const rate = (req.body.term === "14") ? SMS_LOAN_14_DAYS : SMS_LOAN_30_DAYS;
@@ -301,10 +265,10 @@ app.post('/deposit', async (req, res) => {
     await User.findByIdAndUpdate(req.session.userId, { 
         pendingDeposit: { amount: parseFloat(req.body.amount), phone: req.body.phone, status: "Pending", date: new Date() } 
     });
-    res.send("<script>alert('Aguardando Aprovação do Agente'); window.location='/dashboard';</script>");
+    res.send("<script>alert('Aguardando Aprovação'); window.location='/dashboard';</script>");
 });
 
 app.get('/logout', (req, res) => { req.session.destroy(); res.redirect('/'); });
 app.get('/toggle-lang', (req, res) => { req.session.lang = req.session.lang === 'en' ? 'pt' : 'en'; res.redirect('back'); });
 
-app.listen(3000, () => console.log("🚀 MarchaFácil: High-Yield Suite Live"));
+app.listen(3000, () => console.log("🚀 MarchaFácil: Admin & User Suite Live"));
