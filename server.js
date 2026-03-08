@@ -78,15 +78,7 @@ input, select { width: 100%; padding: 12px; background: #010409; border: 1px sol
 .lang-toggle { background: transparent; color: #8b949e; border: 1px solid #333; padding: 5px 15px; border-radius: 20px; font-size: 11px; cursor: pointer; float: right; }
 `;
 
-// =============================================================
-// ✅ HELPERS & MIDDLEWARE
-// =============================================================
 const getT = (req) => i18n[req.session.lang || 'pt'];
-
-app.get('/toggle-lang', (req, res) => {
-    req.session.lang = req.session.lang === 'en' ? 'pt' : 'en';
-    res.redirect('back');
-});
 
 // =============================================================
 // ✅ PDF RECEIPT ENGINE
@@ -115,58 +107,39 @@ app.get('/receipt/:txIndex', async (req, res) => {
 });
 
 // =============================================================
-// ✅ DASHBOARD (Standard 5% View)
-// =============================================================
-app.get('/dashboard', async (req, res) => {
-    if (!req.session.userId) return res.redirect('/');
-    const u = await User.findById(req.session.userId);
-    const t = getT(req);
-    const daysLeft = 30 - Math.floor((new Date() - new Date(u.lastProfitDate)) / (1000 * 60 * 60 * 24));
-
-    res.send(`<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body>
-    <div class="container">
-        <button class="lang-toggle" onclick="window.location='/toggle-lang'">${t.lang}</button>
-        <div class="balance-card">
-            <small>${t.balance}</small>
-            <h1>${u.balance.toLocaleString()} ${CURRENCY}</h1>
-            <div style="font-size:11px;">${t.profit_msg} ${daysLeft > 0 ? daysLeft : 0} ${t.days}</div>
-        </div>
-
-        ${u.pendingDeposit?.status === 'Rejected' ? `<div class="card" style="color:var(--admin)"><b>${t.reject_msg}:</b> ${u.pendingDeposit.reason}</div>` : ''}
-
-        <div class="card">
-            <h3>${t.deposit}</h3>
-            <form action="/deposit" method="POST"><input type="number" name="amount" required><button>${t.request}</button></form>
-        </div>
-
-        <div class="card">
-            <h3>${t.history}</h3>
-            ${u.transactions.slice(-4).reverse().map((tx, i) => `
-                <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid #333;">
-                    <span style="font-size:13px;">${tx.type}<br><small>${tx.date}</small></span>
-                    <button class="btn-small" onclick="window.location='/receipt/${u.transactions.length - 1 - i}'">PDF</button>
-                </div>
-            `).join('')}
-        </div>
-
-        ${u.isAgent || u.isAdmin ? `<button onclick="window.location='/agent'" style="background:var(--agent); color:white">${t.agent_panel}</button>` : ''}
-        <button onclick="window.location='/logout'" style="background:transparent; border:1px solid #444; color:white">${t.logout}</button>
-    </div></body></html>`);
-});
-
-// =============================================================
-// ✅ AGENT PANEL (10% Lending + Referrals)
+// ✅ AGENT PANEL (UPDATED WITH REFERRAL GENERATOR)
 // =============================================================
 app.get('/agent', async (req, res) => {
     if (!req.session.isAgent && !req.session.isAdmin) return res.redirect('/');
     const u = await User.findById(req.session.userId);
     const t = getT(req);
     const pendings = await User.find({ "pendingDeposit.status": "Pending" });
+    
+    // Generate the referral link
+    const refLink = `https://marchafacil.onrender.com/signup?ref=${u._id}`;
 
     res.send(`<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body>
     <div class="container">
         <button class="lang-toggle" onclick="window.location='/toggle-lang'">${t.lang}</button>
+        
         <div class="agent-card">
+            <small>REFERRAL LINK / LINK DE CONVITE</small>
+            <input type="text" id="refLink" value="${refLink}" readonly 
+                   style="background:rgba(255,255,255,0.1); border:none; margin-top:10px; text-align:center; font-size:12px; color:white;">
+            <button onclick="copyLink()" style="background:white; color:var(--agent); padding:10px; font-size:12px; margin-top:5px; height:auto; width:auto;">Copy / Copiar</button>
+        </div>
+
+        <script>
+            function copyLink() {
+                var copyText = document.getElementById("refLink");
+                copyText.select();
+                copyText.setSelectionRange(0, 99999);
+                navigator.clipboard.writeText(copyText.value);
+                alert("Link Copied! / Link Copiado!");
+            }
+        </script>
+
+        <div class="agent-card" style="background:linear-gradient(135deg, #2196f3 0%, #1565c0 100%);">
             <small>${t.lend}</small>
             <h2>${u.agentLendingBalance.toLocaleString()} ${CURRENCY}</h2>
             <div style="font-size:11px;">Ref: ${u.qualifiedReferrals}/20 (${t.amount} <= 20k)</div>
@@ -197,8 +170,16 @@ app.get('/agent', async (req, res) => {
 });
 
 // =============================================================
-// ✅ SYSTEM LOGIC (Referrals, Rejection, Lending)
+// ✅ SYSTEM LOGIC & AUTH (STABLE ROUTES)
 // =============================================================
+
+app.get('/dashboard', async (req, res) => {
+    if (!req.session.userId) return res.redirect('/');
+    const u = await User.findById(req.session.userId);
+    const t = getT(req);
+    const daysLeft = 30 - Math.floor((new Date() - new Date(u.lastProfitDate)) / (1000 * 60 * 60 * 24));
+    res.send(`<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body><div class="container"><button class="lang-toggle" onclick="window.location='/toggle-lang'">${t.lang}</button><div class="balance-card"><small>${t.balance}</small><h1>${u.balance.toLocaleString()} ${CURRENCY}</h1><div style="font-size:11px;">${t.profit_msg} ${daysLeft > 0 ? daysLeft : 0} ${t.days}</div></div><div class="card"><h3>${t.deposit}</h3><form action="/deposit" method="POST"><input type="number" name="amount" required><button>${t.request}</button></form></div><div class="card"><h3>${t.history}</h3>${u.transactions.slice(-4).reverse().map((tx, i) => `<div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid #333;"><span style="font-size:13px;">${tx.type}<br><small>${tx.date}</small></span><button class="btn-small" onclick="window.location='/receipt/${u.transactions.length - 1 - i}'">PDF</button></div>`).join('')}</div>${u.isAgent || u.isAdmin ? `<button onclick="window.location='/agent'" style="background:var(--agent); color:white">${t.agent_panel}</button>` : ''}<button onclick="window.location='/logout'" style="background:transparent; border:1px solid #444; color:white">${t.logout}</button></div></body></html>`);
+});
 
 app.post('/confirm-deposit', async (req, res) => {
     const u = await User.findById(req.body.uid);
@@ -208,76 +189,20 @@ app.post('/confirm-deposit', async (req, res) => {
         u.pendingDeposit = { status: "Confirmed", date: new Date() };
         u.transactions.push({ type: "Depósito", amount: amt, date: new Date().toLocaleDateString() });
         await u.save();
-
-        // Bonus Logic: Max 20,000 MT per person
         if (u.referredBy && amt <= MAX_DEPOSIT_FOR_QUALIFY) {
             const agent = await User.findById(u.referredBy);
-            if (agent) {
-                agent.qualifiedReferrals += 1;
-                if (agent.qualifiedReferrals === REQUIRED_REFERRALS) {
-                    agent.balance += REFERRAL_BONUS;
-                    agent.transactions.push({ type: "BONUS 20 REF 🎁", amount: REFERRAL_BONUS, date: new Date().toLocaleDateString() });
-                }
-                await agent.save();
-            }
+            if (agent) { agent.qualifiedReferrals += 1; if (agent.qualifiedReferrals === REQUIRED_REFERRALS) { agent.balance += REFERRAL_BONUS; agent.transactions.push({ type: "BONUS 20 REF 🎁", amount: REFERRAL_BONUS, date: new Date().toLocaleDateString() }); } await agent.save(); }
         }
     }
     res.redirect('/agent');
 });
 
-app.post('/reject-deposit', async (req, res) => {
-    await User.findByIdAndUpdate(req.body.uid, { 
-        "pendingDeposit.status": "Rejected", 
-        "pendingDeposit.reason": req.body.reason 
-    });
-    res.redirect('/agent');
-});
-
-app.post('/agent/lend', async (req, res) => {
-    const u = await User.findById(req.session.userId);
-    const amt = parseFloat(req.body.amount);
-    if (u.balance >= amt) {
-        u.balance -= amt; u.agentLendingBalance += amt; u.agentLendingDate = new Date();
-        await u.save();
-    }
-    res.redirect('/agent');
-});
-
-// =============================================================
-// ✅ AUTH & PUBLIC
-// =============================================================
-app.get('/', (req, res) => {
-    const t = getT(req);
-    res.send(`<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head>
-    <body style="display:flex; align-items:center;"><div class="container">
-        <button class="lang-toggle" onclick="window.location='/toggle-lang'">${t.lang}</button>
-        <h1 style="text-align:center; color:var(--primary)">MARCHAFÁCIL</h1>
-        <div class="card"><form action="/login" method="POST">
-            <input type="email" name="email" placeholder="Email" required>
-            <input type="password" name="passcode" placeholder="PIN" required>
-            <button>${t.login}</button>
-        </form></div>
-    </div></body></html>`);
-});
-
-app.post('/login', async (req, res) => {
-    const u = await User.findOne({ email: req.body.email.toLowerCase(), passcode: req.body.passcode });
-    if (u) {
-        req.session.userId = u._id;
-        req.session.isAdmin = u.isAdmin;
-        req.session.isAgent = u.isAgent;
-        return res.redirect('/dashboard');
-    }
-    res.send("Error");
-});
-
-app.post('/deposit', async (req, res) => {
-    await User.findByIdAndUpdate(req.session.userId, { 
-        pendingDeposit: { amount: parseFloat(req.body.amount), status: "Pending", date: new Date() } 
-    });
-    res.redirect('/dashboard');
-});
-
+app.post('/reject-deposit', async (req, res) => { await User.findByIdAndUpdate(req.body.uid, { "pendingDeposit.status": "Rejected", "pendingDeposit.reason": req.body.reason }); res.redirect('/agent'); });
+app.post('/agent/lend', async (req, res) => { const u = await User.findById(req.session.userId); const amt = parseFloat(req.body.amount); if (u.balance >= amt) { u.balance -= amt; u.agentLendingBalance += amt; u.agentLendingDate = new Date(); await u.save(); } res.redirect('/agent'); });
+app.get('/toggle-lang', (req, res) => { req.session.lang = req.session.lang === 'en' ? 'pt' : 'en'; res.redirect('back'); });
+app.get('/', (req, res) => { const t = getT(req); res.send(`<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body style="display:flex; align-items:center;"><div class="container"><button class="lang-toggle" onclick="window.location='/toggle-lang'">${t.lang}</button><h1 style="text-align:center; color:var(--primary)">MARCHAFÁCIL</h1><div class="card"><form action="/login" method="POST"><input type="email" name="email" placeholder="Email" required><input type="password" name="passcode" placeholder="PIN" required><button>${t.login}</button></form></div></div></body></html>`); });
+app.post('/login', async (req, res) => { const u = await User.findOne({ email: req.body.email.toLowerCase(), passcode: req.body.passcode }); if (u) { req.session.userId = u._id; req.session.isAdmin = u.isAdmin; req.session.isAgent = u.isAgent; return res.redirect('/dashboard'); } res.send("Error"); });
+app.post('/deposit', async (req, res) => { await User.findByIdAndUpdate(req.session.userId, { pendingDeposit: { amount: parseFloat(req.body.amount), status: "Pending", date: new Date() } }); res.redirect('/dashboard'); });
 app.get('/logout', (req, res) => { req.session.destroy(); res.redirect('/'); });
 
 app.listen(3000, () => console.log("🚀 MarchaFácil Omni-Suite Live on Port 3000"));
