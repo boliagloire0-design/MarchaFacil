@@ -210,5 +210,5 @@ app.get('/logout', (req, res) => { req.session.destroy(); res.redirect('/'); });
 // =============================================================
 // ✅ DYNAMIC PORT FOR RENDER (Fixed 502 Bad Gateway)
 // =============================================================
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000; // Render defaults to 10000 if not specified
 app.listen(PORT, () => console.log(`🚀 MarchaFácil Live on port ${PORT}`));
