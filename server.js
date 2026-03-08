@@ -4,11 +4,18 @@ const mongoose = require('mongoose');
 const app = express();
 
 // =============================================================
-// ✅ CONFIGURATION
+// ✅ CONFIGURATION (Fixed Connection Logic)
 // =============================================================
-const MONGO_URI = "mongodb+srv://boliagloire0_db_user:1995:George1933@cluster0.bem8n8n.mongodb.net/marchafacil?retryWrites=true&w=majority";
+const dbUser = "boliagloire0_db_user";
+const dbPass = encodeURIComponent("George1933"); 
+const MONGO_URI = `mongodb+srv://${dbUser}:${dbPass}@cluster0.e1lz0pj.mongodb.net/marchafacil?retryWrites=true&w=majority&appName=Cluster0`;
 
-mongoose.connect(MONGO_URI).then(() => console.log("✅ MarchaFácil: Systems Online"));
+mongoose.connect(MONGO_URI)
+    .then(() => console.log("✅ MarchaFácil: Systems Online (Connected to Cluster0)"))
+    .catch(err => {
+        console.error("❌ MongoDB Connection Error:", err.message);
+        process.exit(1); 
+    });
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
