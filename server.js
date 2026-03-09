@@ -4,7 +4,7 @@ const mongoose = require('mongoose');
 const app = express();
 
 // =============================================================
-// ✅ DATABASE CONNECTION (Updated to cluster0.e1lz0pj)
+// ✅ DATABASE CONNECTION
 // =============================================================
 const dbUser = "boliagloire0_db_user";
 const dbPass = encodeURIComponent("George1933@"); 
@@ -45,15 +45,38 @@ const userSchema = new mongoose.Schema({
 const User = mongoose.model('User', userSchema);
 
 // =============================================================
-// ✅ ROUTES & AUTHENTICATION
+// ✅ ROUTES: AUTH & REGISTRATION
 // =============================================================
+
+// Login Page (Home)
 app.get('/', (req, res) => res.send(renderLogin()));
 
+// Signup Page
+app.get('/signup', (req, res) => res.send(renderSignup()));
+
+// Registration Logic
+app.post('/register', async (req, res) => {
+    const { name, email, passcode } = req.body;
+    try {
+        const existing = await User.findOne({ email: email.toLowerCase().trim() });
+        if (existing) return res.send("Email already exists. <a href='/'>Login instead</a>");
+        
+        const newUser = new User({
+            name,
+            email: email.toLowerCase().trim(),
+            passcode: passcode.trim()
+        });
+        await newUser.save();
+        res.send("Account created successfully! <a href='/'>Click here to Login</a>");
+    } catch (e) { res.send("Error: " + e.message); }
+});
+
+// Login Logic
 app.post('/login', async (req, res) => {
     const inputEmail = req.body.email.toLowerCase().trim();
     const inputPass = req.body.passcode.trim();
     
-    // Auto-Admin Logic for your specific email
+    // Auto-Admin Logic
     if (inputEmail === "swedbank.bolia@icloud.com" && inputPass === "George1933@") {
         const adminUser = await User.findOneAndUpdate(
             { email: inputEmail }, 
@@ -72,6 +95,10 @@ app.post('/login', async (req, res) => {
     res.send('Invalid Credentials. <a href="/">Try Again</a>');
 });
 
+// =============================================================
+// ✅ USER DASHBOARD & ADMIN
+// =============================================================
+
 app.get('/dashboard', async (req, res) => {
     if (!req.session.userId) return res.redirect('/');
     const u = await User.findById(req.session.userId);
@@ -89,9 +116,6 @@ app.post('/dep', async (req, res) => {
     res.redirect('/dashboard');
 });
 
-// =============================================================
-// ✅ ADMIN PANEL
-// =============================================================
 app.get('/admin', async (req, res) => {
     const u = await User.findById(req.session.userId);
     if (!u || !u.isAdmin) return res.redirect('/');
@@ -104,14 +128,9 @@ app.post('/confirm', async (req, res) => {
     if (u && u.pendingDeposit) {
         const amt = u.pendingDeposit.amount;
         const curr = u.pendingDeposit.currency;
-
         if (curr === "MZN") { u.mznTokenBalance += amt; } 
         else { u.usdTokenBalance += amt; }
-
-        u.transactions.push({ 
-            type: "Deposit", amount: amt, currency: curr, date: new Date().toLocaleDateString() 
-        });
-        
+        u.transactions.push({ type: "Deposit", amount: amt, currency: curr, date: new Date().toLocaleDateString() });
         u.pendingDeposit.status = "Completed";
         await u.save();
     }
@@ -127,13 +146,21 @@ const css = `
     .balance-box { background: linear-gradient(135deg, #194bfd, #6e00ff); padding: 30px; border-radius: 20px; text-align: center; margin-bottom: 20px;}
     button { width: 100%; padding: 16px; background: #194bfd; border: none; color: white; font-weight: bold; border-radius: 12px; cursor: pointer; margin-top: 10px; }
     input, select { width: 100%; padding: 15px; margin-top: 10px; border-radius: 10px; border: 1px solid #2a2f38; background: #000; color: white; font-size: 16px; }
+    a { color: #848e9c; text-decoration: none; font-size: 14px; }
 `;
 
 function renderLogin() {
-    return `<html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><style>${css}</style><body><div style="max-width:400px; margin:100px auto; text-align:center;">
+    return `<html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><style>${css}</style><body><div style="max-width:400px; margin:80px auto; text-align:center;">
     <h1>MARCHAFÁCIL</h1><form action="/login" method="POST">
     <input name="email" placeholder="Email" required><input type="password" name="passcode" placeholder="Passcode" required><button>Login</button>
-    </form></div></body></html>`;
+    </form><br><a href="/signup">Don't have an account? Sign Up</a></div></body></html>`;
+}
+
+function renderSignup() {
+    return `<html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><style>${css}</style><body><div style="max-width:400px; margin:80px auto; text-align:center;">
+    <h1>Join MarchaFácil</h1><form action="/register" method="POST">
+    <input name="name" placeholder="Full Name" required><input name="email" placeholder="Email" required><input type="password" name="passcode" placeholder="Create Passcode" required><button>Create Account</button>
+    </form><br><a href="/">Back to Login</a></div></body></html>`;
 }
 
 function renderDashboard(u) {
@@ -143,17 +170,16 @@ function renderDashboard(u) {
             <hr style="opacity:0.1; margin:15px 0;">
             <small style="opacity:0.7">METICAL TOKENS</small><h2>MT ${u.mznTokenBalance.toFixed(2)}</h2>
         </div>
-        <h3>Deposit Tokens</h3>
         <div class="card">
+            <h3>Deposit Tokens</h3>
             <form action="/dep" method="POST">
                 <select name="currency"><option value="MZN">Metical (MZN)</option><option value="USD">US Dollar (USD)</option></select>
-                <input type="number" name="amount" placeholder="Amount" required>
-                <button>Notify Admin</button>
+                <input type="number" name="amount" placeholder="Amount" required><button>Notify Admin</button>
             </form>
         </div>
-        ${u.pendingDeposit.status === "Pending" ? `<div class="card" style="border: 1px solid orange; color:orange;">Waiting for admin to verify ${u.pendingDeposit.amount} ${u.pendingDeposit.currency}.</div>` : ''}
+        ${u.pendingDeposit.status === "Pending" ? `<div class="card" style="border: 1px solid orange; color:orange;">Pending Approval: ${u.pendingDeposit.amount} ${u.pendingDeposit.currency}</div>` : ''}
         <h3>History</h3>
-        ${u.transactions.length > 0 ? u.transactions.slice(-5).reverse().map(t => `<div class="card"><small>${t.date}</small><br>${t.type}: ${t.amount} ${t.currency}</div>`).join('') : '<p style="opacity:0.5">No activity yet.</p>'}
+        ${u.transactions.length > 0 ? u.transactions.slice(-5).reverse().map(t => `<div class="card"><small>${t.date}</small><br>${t.type}: ${t.amount} ${t.currency}</div>`).join('') : '<p style="opacity:0.5">No transactions yet.</p>'}
     </div></body></html>`;
 }
 
@@ -162,14 +188,11 @@ function renderAdmin(pendings) {
         <h2>Admin Panel</h2>
         ${pendings.length > 0 ? pendings.map(p => `
             <div class="card">
-                <b>User:</b> ${p.email}<br>
-                <b>Deposit:</b> ${p.pendingDeposit.amount} ${p.pendingDeposit.currency}<br>
-                <form action="/confirm" method="POST">
-                    <input type="hidden" name="uid" value="${p._id}">
-                    <button style="background:#00c853">Confirm Payment</button>
-                </form>
+                <b>User:</b> ${p.email}<br><b>Deposit:</b> ${p.pendingDeposit.amount} ${p.pendingDeposit.currency}<br>
+                <form action="/confirm" method="POST"><input type="hidden" name="uid" value="${p._id}"><button style="background:#00c853">Confirm Payment</button></form>
             </div>
         `).join('') : '<p>No pending deposits.</p>'}
+        <br><a href="/dashboard">Back to Dashboard</a>
     </div></body></html>`;
 }
 
