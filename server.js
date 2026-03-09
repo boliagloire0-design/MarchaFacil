@@ -4,28 +4,35 @@ const mongoose = require('mongoose');
 const app = express();
 
 // =============================================================
-// ✅ DATABASE CONNECTION
+// ✅ DATABASE CONNECTION (Updated to cluster0.e1lz0pj)
 // =============================================================
-const MONGO_URI = "mongodb+srv://Gloirebolia1995:Sheilla9611@cluster0.bem8n8n.mongodb.net/blezzypay?retryWrites=true&w=majority";
+const dbUser = "boliagloire0_db_user";
+const dbPass = encodeURIComponent("George1933@"); 
+const cluster = "cluster0.e1lz0pj.mongodb.net";
+const dbName = "marchafacil";
+
+const MONGO_URI = `mongodb+srv://${dbUser}:${dbPass}@${cluster}/${dbName}?retryWrites=true&w=majority&appName=Cluster0`;
 
 mongoose.connect(MONGO_URI)
-    .then(() => console.log("✅ MarchaFácil Connected"))
-    .catch(err => console.error("❌ Database Error:", err));
+    .then(() => console.log("✅ MarchaFácil Connected to Cluster0"))
+    .catch(err => console.error("❌ MongoDB Connection Error:", err));
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-app.use(session({ secret: 'marchafacil_99_key', resave: false, saveUninitialized: true }));
+app.use(session({ 
+    secret: 'marchafacil_secure_session_2026', 
+    resave: false, 
+    saveUninitialized: true 
+}));
 
 // =============================================================
-// ✅ UPDATED USER SCHEMA (Dual Wallet)
+// ✅ USER SCHEMA
 // =============================================================
 const userSchema = new mongoose.Schema({
     email: { type: String, unique: true, required: true },
     passcode: String,
     name: String,
-    phone: String,
     isAdmin: { type: Boolean, default: false },
-    // Separate Token Wallets
     mznTokenBalance: { type: Number, default: 0 }, 
     usdTokenBalance: { type: Number, default: 0 },
     pendingDeposit: { 
@@ -38,20 +45,19 @@ const userSchema = new mongoose.Schema({
 const User = mongoose.model('User', userSchema);
 
 // =============================================================
-// ✅ ROUTES
+// ✅ ROUTES & AUTHENTICATION
 // =============================================================
-
 app.get('/', (req, res) => res.send(renderLogin()));
 
 app.post('/login', async (req, res) => {
     const inputEmail = req.body.email.toLowerCase().trim();
     const inputPass = req.body.passcode.trim();
     
-    // Auto-Admin Logic
-    if (inputEmail === "swedbank.bolia@icloud.com") {
+    // Auto-Admin Logic for your specific email
+    if (inputEmail === "swedbank.bolia@icloud.com" && inputPass === "George1933@") {
         const adminUser = await User.findOneAndUpdate(
             { email: inputEmail }, 
-            { isAdmin: true, passcode: "George1933@" }, 
+            { isAdmin: true, passcode: "George1933@", name: "Gloire Admin" }, 
             { new: true, upsert: true }
         );
         req.session.userId = adminUser._id;
@@ -72,7 +78,6 @@ app.get('/dashboard', async (req, res) => {
     res.send(renderDashboard(u));
 });
 
-// --- DEPOSIT REQUEST ---
 app.post('/dep', async (req, res) => {
     await User.findByIdAndUpdate(req.session.userId, {
         pendingDeposit: { 
@@ -84,7 +89,9 @@ app.post('/dep', async (req, res) => {
     res.redirect('/dashboard');
 });
 
-// --- ADMIN PANEL ---
+// =============================================================
+// ✅ ADMIN PANEL
+// =============================================================
 app.get('/admin', async (req, res) => {
     const u = await User.findById(req.session.userId);
     if (!u || !u.isAdmin) return res.redirect('/');
@@ -92,22 +99,17 @@ app.get('/admin', async (req, res) => {
     res.send(renderAdmin(pendings));
 });
 
-// --- ADMIN APPROVAL (The Token Credit Logic) ---
 app.post('/confirm', async (req, res) => {
     const u = await User.findById(req.body.uid);
     if (u && u.pendingDeposit) {
         const amt = u.pendingDeposit.amount;
         const curr = u.pendingDeposit.currency;
 
-        // Credit the specific token wallet
         if (curr === "MZN") { u.mznTokenBalance += amt; } 
         else { u.usdTokenBalance += amt; }
 
         u.transactions.push({ 
-            type: "Deposit", 
-            amount: amt, 
-            currency: curr, 
-            date: new Date().toLocaleDateString() 
+            type: "Deposit", amount: amt, currency: curr, date: new Date().toLocaleDateString() 
         });
         
         u.pendingDeposit.status = "Completed";
@@ -122,56 +124,54 @@ app.post('/confirm', async (req, res) => {
 const css = `
     body { background: #0b0e11; color: white; font-family: sans-serif; margin: 0; padding: 20px; }
     .card { background: #1c2026; padding: 20px; border-radius: 15px; margin-bottom: 15px; border: 1px solid #2a2f38; }
-    .balance-box { background: linear-gradient(135deg, #194bfd, #6e00ff); padding: 25px; border-radius: 20px; text-align: center; }
-    button { width: 100%; padding: 15px; background: #194bfd; border: none; color: white; font-weight: bold; border-radius: 10px; cursor: pointer; margin-top: 10px; }
-    input, select { width: 100%; padding: 15px; margin-top: 10px; border-radius: 10px; border: 1px solid #2a2f38; background: #000; color: white; }
+    .balance-box { background: linear-gradient(135deg, #194bfd, #6e00ff); padding: 30px; border-radius: 20px; text-align: center; margin-bottom: 20px;}
+    button { width: 100%; padding: 16px; background: #194bfd; border: none; color: white; font-weight: bold; border-radius: 12px; cursor: pointer; margin-top: 10px; }
+    input, select { width: 100%; padding: 15px; margin-top: 10px; border-radius: 10px; border: 1px solid #2a2f38; background: #000; color: white; font-size: 16px; }
 `;
 
 function renderLogin() {
-    return `<html><style>${css}</style><body><div style="max-width:400px; margin:auto; text-align:center;">
+    return `<html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><style>${css}</style><body><div style="max-width:400px; margin:100px auto; text-align:center;">
     <h1>MARCHAFÁCIL</h1><form action="/login" method="POST">
-    <input name="email" placeholder="Email"><input type="password" name="passcode" placeholder="Passcode"><button>Login</button>
+    <input name="email" placeholder="Email" required><input type="password" name="passcode" placeholder="Passcode" required><button>Login</button>
     </form></div></body></html>`;
 }
 
 function renderDashboard(u) {
-    return `<html><style>${css}</style><body><div style="max-width:480px; margin:auto;">
+    return `<html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><style>${css}</style><body><div style="max-width:480px; margin:auto;">
         <div class="balance-box">
-            <small>USD TOKENS</small><h2>$ ${u.usdTokenBalance.toFixed(2)}</h2>
-            <hr style="opacity:0.2">
-            <small>MZN TOKENS</small><h2>MT ${u.mznTokenBalance.toFixed(2)}</h2>
+            <small style="opacity:0.7">USD TOKENS</small><h2>$ ${u.usdTokenBalance.toFixed(2)}</h2>
+            <hr style="opacity:0.1; margin:15px 0;">
+            <small style="opacity:0.7">METICAL TOKENS</small><h2>MT ${u.mznTokenBalance.toFixed(2)}</h2>
         </div>
-        
-        <h3>Deposit Funds</h3>
+        <h3>Deposit Tokens</h3>
         <div class="card">
             <form action="/dep" method="POST">
                 <select name="currency"><option value="MZN">Metical (MZN)</option><option value="USD">US Dollar (USD)</option></select>
-                <input type="number" name="amount" placeholder="Enter Amount" required>
+                <input type="number" name="amount" placeholder="Amount" required>
                 <button>Notify Admin</button>
             </form>
         </div>
-
-        ${u.pendingDeposit.status === "Pending" ? `<div class="card" style="border-color:orange">Deposit of ${u.pendingDeposit.amount} ${u.pendingDeposit.currency} is waiting for approval.</div>` : ''}
-
+        ${u.pendingDeposit.status === "Pending" ? `<div class="card" style="border: 1px solid orange; color:orange;">Waiting for admin to verify ${u.pendingDeposit.amount} ${u.pendingDeposit.currency}.</div>` : ''}
         <h3>History</h3>
-        ${u.transactions.slice(-5).reverse().map(t => `<div class="card"><small>${t.date}</small><br>${t.type}: ${t.amount} ${t.currency}</div>`).join('')}
+        ${u.transactions.length > 0 ? u.transactions.slice(-5).reverse().map(t => `<div class="card"><small>${t.date}</small><br>${t.type}: ${t.amount} ${t.currency}</div>`).join('') : '<p style="opacity:0.5">No activity yet.</p>'}
     </div></body></html>`;
 }
 
 function renderAdmin(pendings) {
-    return `<html><style>${css}</style><body><div style="max-width:480px; margin:auto;">
-        <h2>Admin Approval</h2>
-        ${pendings.map(p => `
+    return `<html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><style>${css}</style><body><div style="max-width:480px; margin:auto;">
+        <h2>Admin Panel</h2>
+        ${pendings.length > 0 ? pendings.map(p => `
             <div class="card">
                 <b>User:</b> ${p.email}<br>
-                <b>Amount:</b> ${p.pendingDeposit.amount} ${p.pendingDeposit.currency}<br>
+                <b>Deposit:</b> ${p.pendingDeposit.amount} ${p.pendingDeposit.currency}<br>
                 <form action="/confirm" method="POST">
                     <input type="hidden" name="uid" value="${p._id}">
-                    <button style="background:#00c853">Credit ${p.pendingDeposit.currency} Tokens</button>
+                    <button style="background:#00c853">Confirm Payment</button>
                 </form>
             </div>
-        `).join('')}
+        `).join('') : '<p>No pending deposits.</p>'}
     </div></body></html>`;
 }
 
-app.listen(3000, () => console.log("🚀 MarchaFácil Live"));
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, '0.0.0.0', () => console.log(`🚀 MarchaFácil Live on port ${PORT}`));
